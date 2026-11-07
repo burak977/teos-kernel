@@ -27,10 +27,9 @@ jobs:
             sed -i 's/qcom,msm-id = .*/qcom,msm-id = <0x140 0x00>, <0x139 0x00>;/' "$dts"
             sed -i 's/qcom,board-id = .*/qcom,board-id = <0x580008 0xd0>, <0x10008 0x03>;/' "$dts"
           done
-          DEFCONFIG=$(find arch/arm64/configs -type f -name "*defconfig" | grep -E "msm8937|rolex|mi8917" | head -n 1)
-          if [ -z "$DEFCONFIG" ]; then
-            DEFCONFIG="arch/arm64/configs/msm8937_defconfig"
-          fi
+          # Mevcut defconfig dosyasini otomatik bul ve ayarlari ekle
+          DEFCONFIG=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
+          echo "Bulunan Defconfig: $DEFCONFIG"
           echo "CONFIG_TOUCHSCREEN_FTS=y" >> "$DEFCONFIG"
           echo "CONFIG_DRM_MSM=y" >> "$DEFCONFIG"
           echo "CONFIG_ANDROID_BINDERFS=y" >> "$DEFCONFIG"
@@ -40,7 +39,10 @@ jobs:
         run: |
           cd kernel
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
-          DEFCONFIG_NAME=$(basename $(find arch/arm64/configs -type f -name "*defconfig" | grep -E "msm8937|rolex|mi8917" | head -n 1))
+          # Dosya adini dinamik olarak al
+          DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
+          DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
+          echo "Derlemede kullanilan defconfig: $DEFCONFIG_NAME"
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
           make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb || make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz
 
