@@ -18,8 +18,15 @@ jobs:
       - name: Clone Clang Toolchain & Mi8917 Linux 4.19 Kernel
         run: |
           export GIT_TERMINAL_PROMPT=0
+          
+          echo "Cloning Clang toolchain..."
           git clone --depth=1 https://github.com clang || true
-          git clone --depth=1 https://github.com kernel || git clone --depth=1 https://github.com kernel
+          
+          echo "Trying to clone primary kernel source..."
+          if ! git clone --depth=1 https://github.com kernel; then
+            echo "Primary kernel failed, trying alternative kernel source..."
+            git clone --depth=1 https://github.com kernel || true
+          fi
 
       - name: Inject Vestel Venus V5 (TEOS) Board ID, Panel & Focaltech FT8607 Touch
         run: |
@@ -45,7 +52,7 @@ jobs:
           sed -i 's/-Werror//g' Makefile || true
           find . -name "Makefile" -exec sed -i 's/-Werror//g' {} + || true
           
-          # HOSTCC=clang eklenerek scripts/ araçlarının yerel GCC yerine Clang ile derlenmesi sağlandı
+          # HOSTCC=clang eklenerek scripts/ araclarinin yerel GCC yerine Clang ile derlenmesi saglandi
           make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz-dtb || make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
