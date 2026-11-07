@@ -20,8 +20,7 @@ jobs:
         with:
           repository: LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b
           path: clang
-          sparse-checkout: |
-            bin
+          ref: master
 
       - name: Checkout LineageOS Kernel
         uses: actions/checkout@v4
