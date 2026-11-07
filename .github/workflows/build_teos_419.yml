@@ -45,7 +45,8 @@ jobs:
           sed -i 's/-Werror//g' Makefile || true
           find . -name "Makefile" -exec sed -i 's/-Werror//g' {} + || true
           
-          make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -Wno-error=return-type" Image.gz-dtb || make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -Wno-error=return-type" Image.gz
+          # HOSTCFLAGS ve HOSTLDFLAGS eklenerek scripts/mod derleme hatalari tamamen bypass edildi
+          make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz-dtb || make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
