@@ -1,8 +1,15 @@
-name: Build Venus V5 (TEOS) Linux 4.19 Android 14 Kernel (GCC)
+name: Build Venus V5 (TEOS) Kernel - Teshisli Surum
+
 on:
   workflow_dispatch:
+    inputs:
+      defconfig:
+        description: "Defconfig yolu (bos birakirsan otomatik secilir). Ornek: vendor/msm8937-perf_defconfig"
+        required: false
+        default: ""
   push:
     branches: [ main, master ]
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -13,7 +20,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev device-tree-compiler python3 python3-pip cpio binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo apt-get install -y bc bison build-essential curl flex git gperf libssl-dev libelf-dev lz4 rsync zip zlib1g-dev device-tree-compiler python3 python-is-python3 cpio gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
 
       - name: Checkout LineageOS Kernel
         uses: actions/checkout@v4
@@ -21,97 +28,147 @@ jobs:
           repository: LineageOS/android_kernel_xiaomi_msm8937
           path: kernel
 
-      - name: Inject Vestel Venus V5 (TEOS) Board ID, Panel & Focaltech FT8607 Touch
+      - name: Show kernel info
+        working-directory: kernel
         run: |
-          if [ ! -d "kernel" ]; then
-            echo "HATA: kernel klasoru bulunamadi!"
-            exit 1
-          fi
-          cd kernel
+          git log -1 --format='Commit: %h %s (%cd)'
+          make kernelversion
+
+      - name: Inject Vestel Venus V5 (TEOS) Board ID
+        working-directory: kernel
+        run: |
           for dts in $(find arch/arm64/boot/dts -name "*rolex*.dts" -o -name "*msm8917*.dts"); do
+            echo "DTS duzenleniyor: $dts"
             sed -i 's/qcom,msm-id = .*/qcom,msm-id = <0x140 0x00>, <0x139 0x00>;/' "$dts"
             sed -i 's/qcom,board-id = .*/qcom,board-id = <0x580008 0xd0>, <0x10008 0x03>;/' "$dts"
           done
-          DEFCONFIG=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
-          echo "CONFIG_TOUCHSCREEN_FTS=y" >> "$DEFCONFIG"
-          echo "CONFIG_DRM_MSM=y" >> "$DEFCONFIG"
-          echo "CONFIG_ANDROID_BINDERFS=y" >> "$DEFCONFIG"
-          echo "CONFIG_DEVTMPFS=y" >> "$DEFCONFIG"
 
-      - name: Compile Linux 4.19 Kernel with GCC
+      - name: Select defconfig
+        working-directory: kernel
+        env:
+          INPUT_DEFCONFIG: ${{ github.event.inputs.defconfig }}
         run: |
-          # GCC hatalı bayrak filtresi (Wrapper) oluşturuluyor
-          mkdir -p "$GITHUB_WORKSPACE/bin_wrapper"
-          cat << 'EOF' > "$GITHUB_WORKSPACE/bin_wrapper/aarch64-linux-gnu-gcc"
-          #!/bin/bash
-          new_args=()
-          for arg in "$@"; do
-              if [ "$arg" = "-implicit-function-declaration" ]; then
-                  continue
-              fi
-              new_args+=("$arg")
-          done
-          exec /usr/bin/aarch64-linux-gnu-gcc "${new_args[@]}"
+          echo "=== Bulunan defconfig dosyalari ==="
+          find arch/arm64/configs -type f -name "*defconfig" | sort
+          if [ -n "$INPUT_DEFCONFIG" ]; then
+            DEFCONFIG="$INPUT_DEFCONFIG"
+          else
+            CAND=$(find arch/arm64/configs -type f -name "*defconfig" | sort)
+            PICK=$(echo "$CAND" | grep -i 'msm8937' | grep -i 'perf' | head -n 1 || true)
+            if [ -z "$PICK" ]; then PICK=$(echo "$CAND" | grep -i 'msm8937' | head -n 1 || true); fi
+            if [ -z "$PICK" ]; then PICK=$(echo "$CAND" | head -n 1); fi
+            DEFCONFIG="${PICK#arch/arm64/configs/}"
+          fi
+          echo "=== Secilen defconfig: $DEFCONFIG ==="
+          echo "DEFCONFIG=$DEFCONFIG" >> "$GITHUB_ENV"
+
+      - name: Compile kernel with GCC
+        working-directory: kernel
+        run: |
+          set +e
+          MAKE_ARGS=(O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS=-w HOSTCFLAGS=-w)
+
+          make "${MAKE_ARGS[@]}" "$DEFCONFIG" > build_config.log 2>&1
+          if [ $? -ne 0 ]; then
+            echo "=== DEFCONFIG URETILEMEDI ==="
+            tail -n 40 build_config.log
+            exit 1
+          fi
+
+          # Ek config satirlari (var olmayan semboller olusturulan .config'ten otomatik dusurulur)
+          cat >> out/.config <<'EOF'
+          CONFIG_TOUCHSCREEN_FTS=y
+          CONFIG_DRM_MSM=y
+          CONFIG_ANDROID_BINDERFS=y
+          CONFIG_DEVTMPFS=y
           EOF
-          chmod +x "$GITHUB_WORKSPACE/bin_wrapper/aarch64-linux-gnu-gcc"
-          
-          export PATH="$GITHUB_WORKSPACE/bin_wrapper:$PATH"
-          cd kernel
-          
-          # Kod tabanındaki geçersiz bayrakları temizle
-          find . -type f \( -name "Makefile" -o -name "Kbuild" -o -name "*.mk" -o -name "*.include" \) -exec sed -i 's/-Werror//g; s/-implicit-function-declaration//g' {} + || true
-          
-          DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
-          DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
-          
-          # Config üretimi
-          make O=out ARCH=arm64 "$DEFCONFIG_NAME"
-          
-          # GCC ile hatasız derleme
-          make -j4 O=out ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            KCFLAGS="-w" \
-            HOSTCFLAGS="-w" \
-            Image.gz-dtb || \
-          make -j4 O=out ARCH=arm64 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            KCFLAGS="-w" \
-            HOSTCFLAGS="-w" \
-            Image.gz
+          ./scripts/config --file out/.config -d ERROR_ON_WARNING -d WERROR
+          make "${MAKE_ARGS[@]}" olddefconfig >> build_config.log 2>&1
+          echo "=== Ek config sembollerinden hangileri kaldi? ==="
+          grep -E "^CONFIG_(TOUCHSCREEN_FTS|DRM_MSM|ANDROID_BINDERFS|DEVTMPFS)=" out/.config
+
+          echo "=== Derleme basliyor ==="
+          make -j"$(nproc)" "${MAKE_ARGS[@]}" Image.gz-dtb > build_parallel.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "Image.gz-dtb olmadi, Image.gz + dtbs deneniyor..."
+            make -j"$(nproc)" "${MAKE_ARGS[@]}" Image.gz dtbs > build_parallel2.log 2>&1
+            rc=$?
+          fi
+
+          if [ $rc -ne 0 ]; then
+            echo "Hata var. Gercek hatayi gormek icin tek is parcacigiyla tekrar calistiriliyor..."
+            make -j1 "${MAKE_ARGS[@]}" Image.gz > build_single.log 2>&1
+            echo "================ GERCEK HATA (son 60 satir) ================"
+            tail -n 60 build_single.log
+            {
+              echo '### Derleme hatasi (son 60 satir)'
+              echo '~~~'
+              tail -n 60 build_single.log
+              echo '~~~'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "=== Derleme tamam ==="
+          ls -la out/arch/arm64/boot/
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: kernel/build_*.log
+          if-no-files-found: ignore
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
-          python3 -c '
-          import struct, glob, os
-          with open("base_boot.img", "rb") as f: orig = f.read()
+          python3 - <<'PY'
+          import glob, os, struct, subprocess, sys
+
+          if not os.path.exists("base_boot.img"):
+              sys.exit("HATA: base_boot.img repoda yok (cihazin orijinal boot.img dosyasi gerekli)")
+
+          with open("base_boot.img", "rb") as f:
+              orig = f.read()
+          if orig[:8] != b"ANDROID!":
+              sys.exit("HATA: base_boot.img gecerli bir Android boot imaji degil")
+
           k_size, k_addr, r_size, r_addr, s_size, s_addr, tags_addr, page_size = struct.unpack("<8I", orig[8:40])
-          
-          k_files = glob.glob("kernel/out/arch/arm64/boot/Image.gz-dtb") + glob.glob("kernel/out/arch/arm64/boot/Image.gz")
-          with open(k_files, "rb") as f: new_k = f.read()
-          
-          if not k_files.endswith("-dtb"):
-              os.system("dtc -I dts -O dtb -o teos_419.dtb teos_stock.dts 2>/dev/null || true")
+          print("page_size:", page_size, "| eski kernel boyutu:", k_size, "| ramdisk boyutu:", r_size)
+
+          boot_dir = "kernel/out/arch/arm64/boot/"
+          k_files = glob.glob(boot_dir + "Image.gz-dtb") or glob.glob(boot_dir + "Image.gz")
+          if not k_files:
+              sys.exit("HATA: derlenmis kernel imaji bulunamadi")
+          k_path = k_files[0]
+          print("Kullanilan kernel:", k_path)
+          with open(k_path, "rb") as f:
+              new_k = f.read()
+
+          if not k_path.endswith("-dtb"):
+              if os.path.exists("teos_stock.dts"):
+                  subprocess.run(["dtc", "-I", "dts", "-O", "dtb", "-o", "teos_419.dtb", "teos_stock.dts"], check=False)
               if os.path.exists("teos_419.dtb"):
-                  with open("teos_419.dtb", "rb") as df: new_k += df.read()
-                  
+                  with open("teos_419.dtb", "rb") as f:
+                      new_k += f.read()
+              else:
+                  print("UYARI: DTB eklenemedi, imaj acilmayabilir")
+
           new_k_size = len(new_k)
           old_k_pages = (k_size + page_size - 1) // page_size
-          ramdisk_offset = (1 + old_k_pages) * page_size
-          rest_of_img = orig[ramdisk_offset:]
-          
+          rest_of_img = orig[(1 + old_k_pages) * page_size:]
           new_hdr = bytearray(orig[:page_size])
           struct.pack_into("<I", new_hdr, 8, new_k_size)
           k_pad = (page_size - (new_k_size % page_size)) % page_size
-          
+
           with open("boot_teos_a14_4.19.img", "wb") as out:
               out.write(new_hdr)
               out.write(new_k)
               out.write(b"\x00" * k_pad)
               out.write(rest_of_img)
-          print("Yeni Android 14 boot imaji hazir! Boyut:", os.path.getsize("boot_teos_a14_4.19.img"))
-          '
+          print("Boot imaji hazir. Boyut:", os.path.getsize("boot_teos_a14_4.19.img"))
+          PY
 
       - name: Upload Flashable Boot Image & Kernel Artifacts
         uses: actions/upload-artifact@v4
@@ -119,5 +176,4 @@ jobs:
           name: Venus-V5-TEOS-Android14-Boot-Image
           path: |
             boot_teos_a14_4.19.img
-            base_boot.img
             kernel/out/arch/arm64/boot/Image*
