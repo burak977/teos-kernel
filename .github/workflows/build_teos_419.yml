@@ -17,19 +17,16 @@ jobs:
 
       - name: Clone Clang Toolchain & Mi8917 Linux 4.19 Kernel
         run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b clang || git clone --depth=1 https://gitlab.com/ThankYouMario/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang
           git clone --depth=1 -b lineage-21.0 https://github.com/LineageOS/android_kernel_xiaomi_msm8937.git kernel || git clone --depth=1 https://github.com/Mi8917/android_kernel_xiaomi_msm8937.git kernel
 
       - name: Inject Vestel Venus V5 (TEOS) Board ID, Panel & Focaltech FT8607 Touch
         run: |
           cd kernel
-          # MSM8920 (0x140) ve TEOS Board ID (0x580008 0xd0) kimliklerini tum rolex/msm8917 DTS dosyalarina isle
           for dts in $(find arch/arm64/boot/dts -name "*rolex*.dts" -o -name "*msm8917*.dts"); do
             sed -i 's/qcom,msm-id = .*/qcom,msm-id = <0x140 0x00>, <0x139 0x00>;/' "$dts"
             sed -i 's/qcom,board-id = .*/qcom,board-id = <0x580008 0xd0>, <0x10008 0x03>;/' "$dts"
           done
-          
-          # Defconfig dosyasini bul ve TEOS suruculerini aktif et
           DEFCONFIG=$(find arch/arm64/configs -name "*rolex*" -o -name "*mi8917*" -o -name "*msm8937*" | head -n 1)
           echo "CONFIG_TOUCHSCREEN_FTS=y" >> "$DEFCONFIG"
           echo "CONFIG_DRM_MSM=y" >> "$DEFCONFIG"
@@ -51,11 +48,9 @@ jobs:
           with open("base_boot.img", "rb") as f: orig = f.read()
           k_size, k_addr, r_size, r_addr, s_size, s_addr, tags_addr, page_size = struct.unpack("<8I", orig[8:40])
           
-          # Derlenen yeni 4.19 cekirdegini bul
           k_files = glob.glob("kernel/out/arch/arm64/boot/Image.gz-dtb") + glob.glob("kernel/out/arch/arm64/boot/Image.gz")
           with open(k_files[0], "rb") as f: new_k = f.read()
           
-          # Eger dtb ayri derlendiyse teos_stock.dts den derlenen dtb yi sona ekle
           if not k_files[0].endswith("-dtb"):
               os.system("dtc -I dts -O dtb -o teos_419.dtb teos_stock.dts 2>/dev/null || true")
               if os.path.exists("teos_419.dtb"):
