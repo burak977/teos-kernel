@@ -50,28 +50,34 @@ jobs:
           cd kernel
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # Hatalı warning/error uretimini engellemek icin Makefile'lari onceden pasifize et
+          # Hatalı warning/error üretimini engellemek için Makefile'ları pasifize et
           find . -type f \( -name "Makefile" -o -name "Kbuild" \) -exec sed -i 's/-Werror//g' {} + || true
+          
+          # HOST araçları ve Clang için gerekli ortam değişkenlerini en başta tanımlıyoruz
+          export HOSTCC=gcc
+          export HOSTCXX=g++
+          export KCFLAGS="-w -Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration -Wno-error=implicit-function-declaration"
+          export HOSTCFLAGS="-w -fcommon -Wno-error -Wno-unknown-warning-option"
           
           DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
           DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
           
-          # Config uretimi
-          make O=out ARCH=arm64 "$DEFCONFIG_NAME"
+          # Config üretimi (HOSTCC ve HOSTCXX ile uyumlu şekilde)
+          make O=out ARCH=arm64 HOSTCC=gcc HOSTCXX=g++ "$DEFCONFIG_NAME"
           
-          # Clang-12 icin hayati parametreler ortam degiskeni olarak zorlanıyor
-          export KCFLAGS="-w -Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration -Wno-error=implicit-function-declaration"
-          export HOSTCFLAGS="-w -fcommon -Wno-error -Wno-unknown-warning-option"
-          
-          # Profesyonel Android Kernel Derleme Argümanları (CLANG_TRIPLE eklendi)
+          # Profesyonel Android Kernel Derleme Argümanları
           make -j4 O=out ARCH=arm64 \
             CC=clang \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image.gz-dtb || \
           make -j4 O=out ARCH=arm64 \
             CC=clang \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
