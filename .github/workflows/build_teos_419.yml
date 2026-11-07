@@ -18,8 +18,8 @@ jobs:
       - name: Clone Clang Toolchain & Mi8917 Linux 4.19 Kernel
         run: |
           export GIT_TERMINAL_PROMPT=0
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang || true
-          git clone --depth=1 https://github.com/Mi8917/android_kernel_xiaomi_msm8937.git kernel || git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_msm8937.git kernel
+          git clone --depth=1 https://github.com clang || true
+          git clone --depth=1 https://github.com kernel || git clone --depth=1 https://github.com kernel
 
       - name: Inject Vestel Venus V5 (TEOS) Board ID, Panel & Focaltech FT8607 Touch
         run: |
@@ -45,8 +45,8 @@ jobs:
           sed -i 's/-Werror//g' Makefile || true
           find . -name "Makefile" -exec sed -i 's/-Werror//g' {} + || true
           
-          # HOSTCFLAGS ve HOSTLDFLAGS eklenerek scripts/mod derleme hatalari tamamen bypass edildi
-          make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz-dtb || make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz
+          # HOSTCC=clang eklenerek scripts/ araçlarının yerel GCC yerine Clang ile derlenmesi sağlandı
+          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz-dtb || make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
