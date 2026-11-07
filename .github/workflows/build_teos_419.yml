@@ -53,11 +53,15 @@ jobs:
           DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
           
+          # Tum Makefile'lardaki tehlikeli flagleri ve engelleri temizle
           sed -i 's/-Werror//g' Makefile || true
           find . -name "Makefile" -exec sed -i 's/-Werror//g' {} + || true
           
-          # HOSTCC=clang ile ana makine araclari uyumlu sekilde derleniyor
-          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz-dtb || make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="-w -fcommon -Wno-error" HOSTLDFLAGS="-fcommon" Image.gz
+          # Clang'in bilinmeyen parametrelerde cokmesini engellemek icin -Wno-unknown-warning-option eklendi
+          CLANG_HOST_FLAGS="-w -fcommon -Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration"
+          
+          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="$CLANG_HOST_FLAGS" HOSTLDFLAGS="-fcommon" Image.gz-dtb || \
+          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="$CLANG_HOST_FLAGS" HOSTLDFLAGS="-fcommon" Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
@@ -67,9 +71,9 @@ jobs:
           k_size, k_addr, r_size, r_addr, s_size, s_addr, tags_addr, page_size = struct.unpack("<8I", orig[8:40])
           
           k_files = glob.glob("kernel/out/arch/arm64/boot/Image.gz-dtb") + glob.glob("kernel/out/arch/arm64/boot/Image.gz")
-          with open(k_files[0], "rb") as f: new_k = f.read()
+          with open(k_files, "rb") as f: new_k = f.read()
           
-          if not k_files[0].endswith("-dtb"):
+          if not k_files.endswith("-dtb"):
               os.system("dtc -I dts -O dtb -o teos_419.dtb teos_stock.dts 2>/dev/null || true")
               if os.path.exists("teos_419.dtb"):
                   with open("teos_419.dtb", "rb") as df: new_k += df.read()
