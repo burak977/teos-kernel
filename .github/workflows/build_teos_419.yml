@@ -22,14 +22,16 @@ jobs:
           echo "Cloning Clang toolchain..."
           git clone --depth=1 https://github.com clang || true
           
-          echo "Trying to clone primary kernel source..."
-          if ! git clone --depth=1 https://github.com kernel; then
-            echo "Primary kernel failed, trying alternative kernel source..."
-            git clone --depth=1 https://github.com kernel || true
-          fi
+          echo "Cloning LineageOS Kernel..."
+          # Klasor ismini acikca 'kernel' olarak belirterek klonluyoruz
+          git clone --depth=1 https://github.com kernel
 
       - name: Inject Vestel Venus V5 (TEOS) Board ID, Panel & Focaltech FT8607 Touch
         run: |
+          if [ ! -d "kernel" ]; then
+            echo "HATA: kernel klasoru bulunamadi! Klonlama adimi basarisiz olmus."
+            exit 1
+          fi
           cd kernel
           for dts in $(find arch/arm64/boot/dts -name "*rolex*.dts" -o -name "*msm8917*.dts"); do
             sed -i 's/qcom,msm-id = .*/qcom,msm-id = <0x140 0x00>, <0x139 0x00>;/' "$dts"
