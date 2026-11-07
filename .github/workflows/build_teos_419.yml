@@ -15,7 +15,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev device-tree-compiler python3 python3-pip cpio
 
-            - name: Clone Clang Toolchain & Mi8917 Linux 4.19 Kernel
+      - name: Clone Clang Toolchain & Mi8917 Linux 4.19 Kernel
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b clang || true
           git clone --depth=1 https://github.com/Mi8917/android_kernel_xiaomi_msm8937.git kernel || git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_msm8937.git kernel
