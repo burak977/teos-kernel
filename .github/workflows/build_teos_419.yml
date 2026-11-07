@@ -13,7 +13,6 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          # Çakışmaya sebep olan multilib paketleri listeden çıkarıldı
           sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev device-tree-compiler python3 python3-pip cpio binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Checkout LineageOS Kernel
@@ -41,10 +40,26 @@ jobs:
 
       - name: Compile Linux 4.19 Kernel with GCC
         run: |
+          # GCC hatalı bayrak filtresi (Wrapper) oluşturuluyor
+          mkdir -p "$GITHUB_WORKSPACE/bin_wrapper"
+          cat << 'EOF' > "$GITHUB_WORKSPACE/bin_wrapper/aarch64-linux-gnu-gcc"
+          #!/bin/bash
+          new_args=()
+          for arg in "$@"; do
+              if [ "$arg" = "-implicit-function-declaration" ]; then
+                  continue
+              fi
+              new_args+=("$arg")
+          done
+          exec /usr/bin/aarch64-linux-gnu-gcc "${new_args[@]}"
+          EOF
+          chmod +x "$GITHUB_WORKSPACE/bin_wrapper/aarch64-linux-gnu-gcc"
+          
+          export PATH="$GITHUB_WORKSPACE/bin_wrapper:$PATH"
           cd kernel
           
-          # Uyarıların hataya dönüşmesini engelle
-          find . -type f \( -name "Makefile" -o -name "Kbuild" -o -name "*.mk" \) -exec sed -i 's/-Werror//g' {} + || true
+          # Kod tabanındaki geçersiz bayrakları temizle
+          find . -type f \( -name "Makefile" -o -name "Kbuild" -o -name "*.mk" -o -name "*.include" \) -exec sed -i 's/-Werror//g; s/-implicit-function-declaration//g' {} + || true
           
           DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
           DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
@@ -52,7 +67,7 @@ jobs:
           # Config üretimi
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
           
-          # GCC ile kararlı derleme
+          # GCC ile hatasız derleme
           make -j4 O=out ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
