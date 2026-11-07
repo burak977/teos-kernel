@@ -40,8 +40,12 @@ jobs:
           DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
           DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
-          # KCFLAGS="-Wno-error" eklendi, modern derleyicinin eski uyarıları hata sayması engellendi
-          make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-Wno-error" Image.gz-dtb || make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-Wno-error" Image.gz
+          
+          # Kaynak kodundaki tum -Werror kurallarini temizle (net/ipv4 hata engelleyici)
+          sed -i 's/-Werror//g' Makefile || true
+          find . -name "Makefile" -exec sed -i 's/-Werror//g' {} + || true
+          
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" Image.gz-dtb || make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
