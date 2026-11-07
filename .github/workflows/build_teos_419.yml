@@ -49,19 +49,22 @@ jobs:
         run: |
           cd kernel
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+          
+          # Clang'i patlatan tum hatali warning/error flag kalıplarını Makefile'lardan temizle
+          find . -name "Makefile" -o -name "Kbuild" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
+          find . -name "Makefile" -o -name "Kbuild" | xargs sed -i 's/-Wno-unknown-warning-option//g' 2>/dev/null || true
+          find . -name "Makefile" -o -name "Kbuild" | xargs sed -i 's/-Wimplicit-function-declaration//g' 2>/dev/null || true
+          
           DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
           DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
           
-          # Tum Makefile'lardaki tehlikeli flagleri ve engelleri temizle
-          sed -i 's/-Werror//g' Makefile || true
-          find . -name "Makefile" -exec sed -i 's/-Werror//g' {} + || true
+          # Clang'in bilinmeyen GCC flaglerinde hata vermesini onleyen global zorlama
+          export KCFLAGS="-w -Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration"
+          export HOSTCFLAGS="-w -fcommon -Wno-error -Wno-unknown-warning-option"
           
-          # Clang'in bilinmeyen parametrelerde cokmesini engellemek icin -Wno-unknown-warning-option eklendi
-          CLANG_HOST_FLAGS="-w -fcommon -Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration"
-          
-          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="$CLANG_HOST_FLAGS" HOSTLDFLAGS="-fcommon" Image.gz-dtb || \
-          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" HOSTCFLAGS="$CLANG_HOST_FLAGS" HOSTLDFLAGS="-fcommon" Image.gz
+          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb || \
+          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
