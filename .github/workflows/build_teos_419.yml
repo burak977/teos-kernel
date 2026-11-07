@@ -27,7 +27,10 @@ jobs:
             sed -i 's/qcom,msm-id = .*/qcom,msm-id = <0x140 0x00>, <0x139 0x00>;/' "$dts"
             sed -i 's/qcom,board-id = .*/qcom,board-id = <0x580008 0xd0>, <0x10008 0x03>;/' "$dts"
           done
-          DEFCONFIG=$(find arch/arm64/configs -name "*rolex*" -o -name "*mi8917*" -o -name "*msm8937*" | head -n 1)
+          DEFCONFIG=$(find arch/arm64/configs -type f -name "*defconfig" | grep -E "msm8937|rolex|mi8917" | head -n 1)
+          if [ -z "$DEFCONFIG" ]; then
+            DEFCONFIG="arch/arm64/configs/msm8937_defconfig"
+          fi
           echo "CONFIG_TOUCHSCREEN_FTS=y" >> "$DEFCONFIG"
           echo "CONFIG_DRM_MSM=y" >> "$DEFCONFIG"
           echo "CONFIG_ANDROID_BINDERFS=y" >> "$DEFCONFIG"
@@ -37,9 +40,9 @@ jobs:
         run: |
           cd kernel
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
-          DEFCONFIG_NAME=$(basename $(find arch/arm64/configs -name "*rolex*" -o -name "*mi8917*" -o -name "*msm8937*" | head -n 1))
+          DEFCONFIG_NAME=$(basename $(find arch/arm64/configs -type f -name "*defconfig" | grep -E "msm8937|rolex|mi8917" | head -n 1))
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
-          make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb || make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- Image.gz
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb || make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
