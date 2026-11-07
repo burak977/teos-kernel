@@ -50,21 +50,22 @@ jobs:
           cd kernel
           export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # Clang'i patlatan tum hatali warning/error flag kalıplarını Makefile'lardan temizle
-          find . -name "Makefile" -o -name "Kbuild" | xargs sed -i 's/-Werror//g' 2>/dev/null || true
-          find . -name "Makefile" -o -name "Kbuild" | xargs sed -i 's/-Wno-unknown-warning-option//g' 2>/dev/null || true
-          find . -name "Makefile" -o -name "Kbuild" | xargs sed -i 's/-Wimplicit-function-declaration//g' 2>/dev/null || true
-          
+          # 1. Aşama: Config dosyasını ve out klasör yapısını oluştur
           DEFCONFIG_PATH=$(find arch/arm64/configs -type f -name "*defconfig" | head -n 1)
           DEFCONFIG_NAME=$(basename "$DEFCONFIG_PATH")
           make O=out ARCH=arm64 "$DEFCONFIG_NAME"
           
-          # Clang'in bilinmeyen GCC flaglerinde hata vermesini onleyen global zorlama
-          export KCFLAGS="-w -Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration"
-          export HOSTCFLAGS="-w -fcommon -Wno-error -Wno-unknown-warning-option"
+          # 2. Aşama: out klasörü oluştuktan sonra TÜM Makefile ve Kbuild dosyalarını temizle
+          echo "Hatalı Clang/GCC flagleri temizleniyor..."
+          find . -type f \( -name "Makefile" -o -name "Kbuild" -o -name "*.build" \) | while read -r file; do
+            sed -i 's/-Werror//g' "$file" 2>/dev/null || true
+            sed -i 's/-Wimplicit-function-declaration//g' "$file" 2>/dev/null || true
+            sed -i 's/-Werror-implicit-function-declaration//g' "$file" 2>/dev/null || true
+          done
           
-          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb || \
-          make -j4 O=out ARCH=arm64 CC=clang HOSTCC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz
+          # 3. Aşama: Derlemeyi başlat (HOSTCC parametresini kaldırarak yerel GCC'ye bıraktık)
+          make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" Image.gz-dtb || \
+          make -j4 O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- KCFLAGS="-w" Image.gz
 
       - name: Repack into Flashable boot_teos_a14_4.19.img
         run: |
@@ -76,7 +77,7 @@ jobs:
           k_files = glob.glob("kernel/out/arch/arm64/boot/Image.gz-dtb") + glob.glob("kernel/out/arch/arm64/boot/Image.gz")
           with open(k_files, "rb") as f: new_k = f.read()
           
-          if not k_files.endswith("-dtb"):
+          if not k_files[0].endswith("-dtb"):
               os.system("dtc -I dts -O dtb -o teos_419.dtb teos_stock.dts 2>/dev/null || true")
               if os.path.exists("teos_419.dtb"):
                   with open("teos_419.dtb", "rb") as df: new_k += df.read()
